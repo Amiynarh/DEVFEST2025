@@ -1,6 +1,5 @@
-# Beyond the Region: Scaling Intelligent Features with Cloud Run and Gemini's Global Network 🌍
+# Beyond the Region: Scaling Intelligent Features with Cloud Run and Gemini's Global Network 
 
-## Introduction
 
 Welcome to this self-paced lab guide\! In modern application development, **resilience** and **low latency** are non-negotiable, especially for intelligent features powered by generative AI. This workshop moves beyond single-region deployments and shows you how to leverage Google Cloud's **Global External Load Balancing (GELB)** to create a single, globally accessible, and fault-tolerant endpoint for a service powered by the Gemini API.
 
@@ -27,7 +26,7 @@ Before deploying to the cloud, the best practice is to isolate and test the core
 
 We use **Google Colab** for this initial step because it provides a zero-setup environment to **isolate the AI logic** and confirm the functionality of the Python code *before* we containerize and deploy it. This separates AI-related bugs from deployment-related issues.
 
-1.  Open the dedicated Colab environment: **`[YOUR COLAB LINK HERE]`**
+1.  Open the dedicated Colab environment: **`[[YOUR COLAB LINK](https://colab.research.google.com/)]`**
 2.  Follow the instructions in the notebook to:
       * Install the `google-genai` SDK.
       * Set your Gemini API Key.
@@ -35,7 +34,6 @@ We use **Google Colab** for this initial step because it provides a zero-setup e
 
 > **Cost-Saving Edition:** We are using **Gemini 2.5 Flash** because it is the optimal model for low-latency, cost-sensitive edge functions like this. Its speed and efficiency make it perfect for features that must scale rapidly.
 
------
 
 ## Part 2: Cloud Run Deployment (Initial Service)
 
@@ -78,7 +76,7 @@ Open your Google Cloud Shell (or a local environment with the gcloud CLI install
 
     Take note of the **Service URL** output, though we will soon be using the Global Load Balancer IP.
 
------
+
 
 ## Part 3: Global Resilience (Multi-Region Setup)
 
@@ -174,7 +172,6 @@ We must configure the GELB to point to our two Cloud Run services via **Serverle
         --ports 80
     ```
 
------
 
 ## Part 4: Verification & Deliverables
 
