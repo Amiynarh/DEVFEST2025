@@ -37,7 +37,8 @@ gcloud services enable \
   run.googleapis.com \
   artifactregistry.googleapis.com \
   compute.googleapis.com \
-  aiplatform.googleapis.com
+  aiplatform.googleapis.com \
+  cloudbuild.googleapis.com
 ```
 
 ### 2\. Create `main.py`
@@ -66,7 +67,7 @@ def generate():
     # Format typically: "City,State,Country"
     user_location = request.headers.get("X-Client-Geo-Location", "Unknown Location")
     
-    model = GenerativeModel("gemini-1.5-flash")
+    model = GenerativeModel("gemini-2.5-flash")
     
     # 3. Construct a location-aware prompt
     prompt = (
@@ -123,7 +124,12 @@ gcloud artifacts repositories create gemini-global-repo \
     --location=us-central1 \
     --description="Repo for Global Gemini App"
 
-# 3. Build the image (This takes about 2 minutes)
+# 3. Prepare the Build Environment (Crucial Step! 💡). To ensure the build process only includes our necessary code and avoids including temporary files from Cloud Shell's home directory 
+mkdir gemini-app
+cd gemini-app
+⚠️ IMPORTANT: Ensure that your main.py and Dockerfile are now located inside the gemini-app/ folder.
+
+# 4. Build the image (This takes about 2 minutes)
 gcloud builds submit --tag us-central1-docker.pkg.dev/$PROJECT_ID/gemini-global-repo/region-ai:v1
 ```
 
@@ -163,7 +169,7 @@ gcloud run deploy gemini-service \
 
 ##  Phase 4: The Global Network (The Glue)
 
-Now for the magic. We need to stitch these three services together behind a single Anycast IP Address.
+You are now ready to execute the steps to create the Global External HTTP Load Balancer infrastructure. This is the "magic" that will give you the single, global IP address and automatically inject the user's location. We need to stitch these three services together behind a single Anycast IP Address.
 
 ### 1\. The Global IP
 
@@ -177,7 +183,7 @@ gcloud compute addresses create gemini-global-ip \
 
 ### 2\. The Network Endpoint Groups (NEGs)
 
-Create a "group" for each region so the Load Balancer knows where they are.
+These map your Cloud Run services to the Load Balancer's backend service. Create a "group" for each region so the Load Balancer knows where they are.
 
 ```bash
 # USA NEG
@@ -201,7 +207,7 @@ gcloud compute network-endpoint-groups create neg-asia \
 
 ### 3\. The Backend Service & Routing
 
-Connect the NEGs to a global backend.
+This is the load balancer's core, distributing traffic across your regions. Connect the NEGs to a global backend.
 
 ```bash
 # Create the backend service
@@ -223,15 +229,15 @@ gcloud compute backend-services add-backend gemini-backend-global \
 Finalize the connection.
 
 ```bash
-# Create URL Map
+# Create URL Map (Maps incoming requests to the backend service)
 gcloud compute url-maps create gemini-url-map \
     --default-service gemini-backend-global
 
-# Create HTTP Proxy
+# Create HTTP Proxy (The component that inspects the request headers)
 gcloud compute target-http-proxies create gemini-http-proxy \
     --url-map gemini-url-map
 
-# Get your IP Address
+# Get your IP Address variable
 export VIP=$(gcloud compute addresses describe gemini-global-ip --global --format="value(address)")
 
 # Create Forwarding Rule (Open port 80)
@@ -248,6 +254,11 @@ gcloud compute forwarding-rules create gemini-forwarding-rule \
 
 Global Load Balancers take about **5-7 minutes** to propagate worldwide. Take a breather. Drink some water. 🥤
 
+This is where you verify that the Global Load Balancer is working correctly:
+- Using the single VIP (Virtual IP) address.
+- Routing traffic to the nearest server.
+- Injecting the X-Client-Geo-Location header to tell your code where the user is.
+
 ### 1\. Get your Global IP
 
 ```bash
@@ -261,7 +272,7 @@ We will use `curl` to spoof our location headers. This simulates what the Load B
 **Simulate Paris:**
 
 ```bash
-curl -H "X-Client-Geo-Location: Paris,France" http://$VIP/
+curl -s -H "X-Client-Geo-Location: Paris,France" http://$VIP/ | jq .
 ```
 
 *Expected Output:* Gemini should say "Bonjour" and mention Paris. The `served_from_region` should be `europe-west1`.
@@ -269,10 +280,17 @@ curl -H "X-Client-Geo-Location: Paris,France" http://$VIP/
 **Simulate Tokyo:**
 
 ```bash
-curl -H "X-Client-Geo-Location: Tokyo,Japan" http://$VIP/
+curl -s -H "X-Client-Geo-Location: Tokyo,Japan" http://$VIP/ | jq .
 ```
 
 *Expected Output:* Gemini should mention Tokyo. The `served_from_region` should be `asia-northeast1`.
+
+**Simulate Abuja:**
+```bash
+curl -s -H "X-Client-Geo-Location: Abuja,Nigeria" http://$VIP/ | jq .
+```
+
+Note: The | jq . part is optional, but highly recommended as it formats the JSON output, making it much easier to read the served_from_region and ai_response details. If jq isn't available, you can just run curl ... without it.
 
 -----
 
